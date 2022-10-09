@@ -1,0 +1,291 @@
+---
+title: "EXP-DELAY-MECH"
+author: "Lei"
+date: "2022-10-09"
+output: pdf_document
+---
+
+```{r message=FALSE}
+library(EnvStats)
+library(dplyr)
+library(ggplot2)
+source("Supp_functions.R")
+```
+
+
+# basic setup
+```{r}
+TT_Choice = c(5e3, 1e4, 1.5e4, 2e4)
+MC = 1e3
+d  = 2
+mu = c(1, 0.5)
+alpha = 0.5
+partial = c(0.5, 1)
+```
+
+
+# no delay
+```{r}
+opts = list(
+  delay_dist = c("NODELAY", "NODELAY"),
+  pmt = c(NA, NA),
+  partial = partial
+)
+
+record_NODELAY = list(
+  TT_Choice_1 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_2 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_3 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_4 = list(arm1 = list(), arm2 = list())
+)
+
+for (ind in 1:4){
+  for (mc in 1:MC){
+    TT  = TT_Choice[ind]
+    DAT = eps_greedy(TT, d, mu, alpha, opts)
+    
+    # first arm
+    target_arm = 1
+    
+    # ipw
+    res_1_ipw = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_1_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    # avg as muhat
+    res_1_avg = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_NODELAY[[ind]]$arm1[[mc]] = list(res_1_ipw, res_1_avg)
+    
+    # second arm
+    target_arm = 2
+    
+    # ipw
+    res_2_ipw  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    #res_2_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    # avg as muhat
+    
+    res_2_avg  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_NODELAY[[ind]]$arm2[[mc]] = list(res_2_ipw, res_2_avg)
+  }
+}
+
+
+```
+
+
+```{r}
+# save results
+saveRDS(record_NODELAY, file = "record_NODELAY.RDS")
+```
+
+
+
+
+
+# possion delay
+```{r}
+opts = list(
+  delay_dist = c("POISSON", "POISSON"),
+  pmt = c(50, 5),
+  partial = partial
+)
+
+record_POISSON = list(
+  TT_Choice_1 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_2 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_3 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_4 = list(arm1 = list(), arm2 = list())
+)
+
+for (ind in 1:4){
+  for (mc in 1:MC){
+    TT  = TT_Choice[ind]
+    DAT = eps_greedy(TT, d, mu, alpha, opts)
+    
+    # first arm
+    target_arm = 1
+    
+    # ipw
+    res_1_ipw = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_1_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_1_avg = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_POISSON[[ind]]$arm1[[mc]] = list(res_1_ipw, res_1_avg)
+    
+    # second arm
+    target_arm = 2
+    
+    # ipw
+    res_2_ipw  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_2_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+     #                  opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_2_avg  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_POISSON[[ind]]$arm2[[mc]] = list(res_2_ipw, res_2_avg)
+  }
+}
+
+
+```
+
+
+```{r}
+# save results
+saveRDS(record_POISSON, file = "record_POISSON.RDS")
+```
+
+# negative binomial delay
+```{r}
+opts = list(
+  delay_dist = c("NEGBINOM", "NEGBINOM"),
+  pmt = list(list(size = 50, prob = 0.5), 
+          list(size = 5, prob = 0.5)),
+  partial = partial
+)
+
+record_NEGBINOM  = list(
+  TT_Choice_1 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_2 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_3 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_4 = list(arm1 = list(), arm2 = list())
+)
+
+for (ind in 1:4){
+  for (mc in 1:MC){
+    TT  = TT_Choice[ind]
+    DAT = eps_greedy(TT, d, mu, alpha, opts)
+    
+    # first arm
+    target_arm = 1
+    
+    # ipw
+    res_1_ipw = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_1_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    # avg as muhat
+    res_1_avg = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_NEGBINOM[[ind]]$arm1[[mc]] = list(res_1_ipw, res_1_avg)
+    
+    # second arm
+    target_arm = 2
+    
+    # ipw
+    res_2_ipw  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    #res_2_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    # avg as muhat
+    
+    res_2_avg  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_NEGBINOM[[ind]]$arm2[[mc]] = list(res_2_ipw, res_2_avg)
+  }
+}
+```
+
+
+```{r}
+# save results
+saveRDS(record_NEGBINOM, file = "record_NEGBINOM.RDS")
+```
+
+
+# pareto delay
+```{r}
+opts = list(
+  delay_dist = c("PARETO", "PARETO"),
+  pmt = c(0.75, 1.25),
+  partial = partial
+)
+
+record_PARETO = list(
+  TT_Choice_1 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_2 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_3 = list(arm1 = list(), arm2 = list()),
+  TT_Choice_4 = list(arm1 = list(), arm2 = list())
+)
+
+for (ind in 1:4){
+  for (mc in 1:MC){
+    TT  = TT_Choice[ind]
+    DAT = eps_greedy(TT, d, mu, alpha, opts)
+    
+    # first arm
+    target_arm = 1
+    
+    # ipw
+    res_1_ipw = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_1_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_1_avg = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_PARETO[[ind]]$arm1[[mc]] = list(res_1_ipw, res_1_avg)
+    
+    # second arm
+    target_arm = 2
+    
+    # ipw
+    res_2_ipw  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_2_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+     #                  opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_2_avg  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_PARETO[[ind]]$arm2[[mc]] = list(res_2_ipw, res_2_avg)
+  }
+}
+
+
+```
+
+
+```{r}
+# save results
+saveRDS(record_PARETO, file = "record_PARETO.RDS")
+```
+
+
+
+

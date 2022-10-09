@@ -1,0 +1,223 @@
+---
+title: "delay"
+author: "Lei"
+date: "2022-10-08"
+output: pdf_document
+---
+
+```{r message=FALSE}
+library(EnvStats)
+library(dplyr)
+library(ggplot2)
+source("Supp_functions.R")
+```
+
+
+
+```{r}
+# testing the intro functions
+# set.seed(2022)
+
+## generate different delays
+get_delay("NODELAY", NA)
+get_delay("POISSON", 1)
+get_delay("NEGBINOM", list(size = 1, prob = 0.5))
+get_delay("PARETO", 0.5)
+
+sapply(1:100, function(x) get_delay("POISSON", 1))
+sapply(1:100, function(x) get_delay("NEGBINOM", list(size = 1, prob = 0.5)))
+sapply(1:100, function(x) get_delay("PARETO", 0.7))
+```
+
+
+Test epsilon greedy: 
+```{r}
+## epsilon greedy
+### no delay
+DAT <- eps_greedy(TT = 5e4, 
+                  d = 2, 
+                  mu = c(1, 0.5), 
+                  alpha = 0.7)
+
+res_ipw <- report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[2,], muhat = 0, a=2)
+res_avg <- report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[2,], muhat = DAT$AVG[2,], a=2)
+# plot(DAT$A)
+```
+
+
+```{r}
+### Poisson delay
+opts = list(
+  delay_dist = c("POISSON", "POISSON"),
+  pmt = c(10, 1),
+  partial = c(0.5, 1)
+)
+DAT = eps_greedy(TT = 1e4, 
+                  d = 2, 
+                  mu = c(1, 0.5), 
+                  alpha = 0.5,
+                  opts)
+
+target_arm = 2
+res_ipw = report_est(DAT$Y, 
+                  DAT$A, 
+                  DAT$D, 
+                  e=DAT$e[target_arm,], 
+                  muhat = rep(0, 1e3), 
+                  a=target_arm)
+
+res_avg = report_est(DAT$Y, 
+                  DAT$A, 
+                  DAT$D, 
+                  e=DAT$e[target_arm,], 
+                  muhat = DAT$AVG[target_arm, ], 
+                  a=target_arm)
+
+```
+
+
+
+
+```{r}
+### Negative binomial delay
+opts = list(
+  delay_dist = c("NEGBINOM", "NEGBINOM"),
+  pmt = list(list(size = 50, prob = 0.5), 
+          list(size = 5, prob = 0.5)),
+  partial = c(0.5, 1)
+)
+DAT = eps_greedy(TT = 2e4, 
+                  d = 2, 
+                  mu = c(1, 0.5), 
+                  alpha = 0.5,
+                  opts)
+
+target_arm = 2
+res = report_est(DAT$Y, 
+                  DAT$A, 
+                  DAT$D, 
+                  e=DAT$e[target_arm,], 
+                  muhat = rep(0, 1e3), 
+                  a=target_arm)
+```
+
+
+
+```{r}
+### Pareto delay
+opts = list(
+  delay_dist = c("PARETO", "PARETO"),
+  pmt = c(0.7, 1),
+  partial = c(1, 1)
+)
+DAT = eps_greedy(TT = 1e4, 
+                  d = 2, 
+                  mu = c(1, 0.5), 
+                  alpha = 0.5,
+                  opts)
+
+target_arm = 2
+res = report_est(DAT$Y, 
+                  DAT$A, 
+                  DAT$D, 
+                  e=DAT$e[target_arm,], 
+                  muhat = rep(0, 1e3), 
+                  a=target_arm)
+```
+
+
+
+# compare different delay mechanism
+
+two arm bandits with the following delay mechanism:
+
+```{r}
+# no delay 
+TT_choice = c(1e3, 5e3, 1e4, 5e4)
+for (TT in TT_choice){
+  ## epsilon greedy
+  Y = rep(NA, TT)
+  A = rep(NA, TT)
+  e0 = rep(NA, TT)
+  e1 = rep(NA, TT)
+  sum_0 = 0
+  sum_1 = 0
+  n_0 = 0
+  n_1 = 0
+  
+  ### burn-in stage: randomized pull
+  burn_in = 0.1*TT
+  for (t in 1:burn_in){
+    e0[t] = 0.5
+    e1[t] = 0.5
+    A[t] = rbinom(1, 1, 0.5)
+    if (A[t]){
+      Y[t] = rnorm(1,0.5)
+      sum_1 = sum_1 + Y[t]
+    }
+    else{
+      Y[t] = rnorm(1,0)
+      sum_0 = sum_0 + Y[t]
+    }
+  }
+  
+  ### greedy stage
+  for (t in ((burn_in + 1):TT)){
+    
+    e1[t] = ifelse(sum_1 >= sum_0, 1 - t^(-0.5), t^(-0.5))
+    e0[t] = 1 - e1[t]
+    A[t] = rbinom(1,1,e1[t])
+    Y[t] = ifelse(A[t], rnorm(1,0.5), rnorm(1,0))
+    sum_1 = ifelse(A[t], sum_1 + Y[t], sum_1)
+    sum_1 = ifelse(A[t], sum_0, sum_0 + Y[t])
+  }
+}
+```
+
+
+```{r}
+# Possion delay (sub-gaussian tail)
+
+```
+
+
+```{r}
+# negative binomial (sub-exponential tail)
+
+```
+
+
+```{r}
+# perato alpha (polynomial tail)
+
+```
+
+
+# compare margin case and no-margin case
+
+```{r}
+# margin case
+mu = c(0.5, 0.5, 0)
+
+```
+
+
+```{r}
+# no margin case
+
+```
+
+
+
+
+
+
+```{r}
+# partially obsevable or fully observable
+
+```
+
+
+
+
+
