@@ -1,0 +1,86 @@
+---
+title: "EXP-DELAY-MARGIN"
+author: "Lei"
+date: "2022-10-08"
+output: pdf_document
+---
+
+```{r message=FALSE}
+library(EnvStats)
+library(dplyr)
+library(ggplot2)
+source("Supp_functions.R")
+```
+
+
+```{r}
+TT = 1e4
+MC = 1e3
+d  = 2
+mu_Choice = list(
+  NoMargin = c(0.5, 0.5),
+  WeakMargin = c(0.6, 0.5),
+  StrongMargin = c(1, 0.5)
+    )
+alpha = 0.5
+partial = c(0.5, 1)
+```
+
+```{r}
+opts = list(
+  delay_dist = c("PARETO", "PARETO"),
+  pmt = c(0.75, 1.25),
+  partial = partial
+)
+
+record_PARETO_MARGIN = list(
+  mu_Choice_1 = list(arm1 = list(), arm2 = list()),
+  mu_Choice_2 = list(arm1 = list(), arm2 = list()),
+  mu_Choice_3 = list(arm1 = list(), arm2 = list())
+)
+
+for (ind in 1:3){
+  for (mc in 1:MC){
+    DAT = eps_greedy(TT, d, mu_Choice[[ind]], alpha, opts)
+    
+    # first arm
+    target_arm = 1
+    
+    # ipw
+    res_1_ipw = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_1_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+    #                   opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_1_avg = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_PARETO_MARGIN[[ind]]$arm1[[mc]] = list(res_1_ipw, res_1_avg)
+    
+    # second arm
+    target_arm = 2
+    
+    # ipw
+    res_2_ipw  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = rep(0, TT), a=target_arm)
+    # delay-oracle
+    # res_2_oracle = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+    #                   muhat = rep(0, TT), a=target_arm,
+     #                  opts = list(pD = partial[target_arm]))
+    
+    # avg as muhat
+    res_2_avg  = report_est(DAT$Y, DAT$A, DAT$D, e=DAT$e[target_arm,], 
+                       muhat = DAT$AVG[target_arm, ], a=target_arm)
+    
+    record_PARETO_MARGIN[[ind]]$arm2[[mc]] = list(res_2_ipw, res_2_avg)
+  }
+}
+```
+
+```{r}
+saveRDS(record_PARETO_MARGIN, file = "record_PARETO_MARGIN.RDS")
+```
+
