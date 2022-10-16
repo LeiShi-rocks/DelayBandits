@@ -149,13 +149,20 @@ record_NoMargin = record_NoMargin %>% gather(key = "Estimator", value = "value")
 position_x = rep(seq(-4, 4, length.out = MC), 6)
 normal_density = dnorm(position_x)
 record_NoMargin = cbind(record_NoMargin, position_x, normal_density)
+```
 
-ggplot(record_NoMargin, aes(x = value)) +
-  geom_histogram(aes(y = ..density..), binwidth = 0.2) +
-  geom_line(aes(x = position_x, y = normal_density)) +
+
+```{r fig.height=2, fig.width=2}
+record_NoMargin$Estimator[record_NoMargin$Estimator == "AIPW"] = "DAIPW"
+plot_NoMargin = ggplot(record_NoMargin %>% filter(Estimator %in% c("DAIPW", "Mean", "NH", "NH0")), aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density), lty = 2) +
   facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
-  theme_minimal() +
+  theme(text = element_text(face="bold")) +
   ylab("")
+
+plot_NoMargin
+ggsave("plot_NoMargin.eps", plot = plot_NoMargin, device = "eps")
 ```
 
 
@@ -198,24 +205,121 @@ for (mc in 1:MC){
   arm2_est = record$mu_Choice_2$arm2[[mc]][[2]]$est[3]
   arm2_var = record$mu_Choice_2$arm2[[mc]][[2]]$var_est[3]
   record_WeakMargin$NH[mc] = (arm1_est - arm2_est - 0.1)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = record$mu_Choice_2$arm1[[mc]][[1]]$est[2]
+  arm1_var = record$mu_Choice_2$arm1[[mc]][[1]]$var_est[2]
+  arm2_est = record$mu_Choice_2$arm2[[mc]][[1]]$est[2]
+  arm2_var = record$mu_Choice_2$arm2[[mc]][[1]]$var_est[2]
+  record_WeakMargin$IAD[mc] = (arm1_est - arm2_est - 0.1)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = record$mu_Choice_2$arm1[[mc]][[1]]$est[3]
+  arm1_var = record$mu_Choice_2$arm1[[mc]][[1]]$var_est[3]
+  arm2_est = record$mu_Choice_2$arm2[[mc]][[1]]$est[3]
+  arm2_var = record$mu_Choice_2$arm2[[mc]][[1]]$var_est[3]
+  record_WeakMargin$NH0[mc] = (arm1_est - arm2_est - 0.1)/sqrt(arm1_var + arm2_var)
 }
 
 record_WeakMargin = record_WeakMargin %>% 
   gather(key = "Estimator", value = "value")
-position_x = rep(seq(-4, 4, length.out = MC), 4)
+position_x = rep(seq(-4, 4, length.out = MC), 6)
 normal_density = dnorm(position_x)
 record_WeakMargin = cbind(record_WeakMargin, position_x, normal_density)
-
-ggplot(record_WeakMargin, aes(x = value)) +
-  geom_histogram(aes(y = ..density..), binwidth = 0.2) +
-  geom_line(aes(x = position_x, y = normal_density)) +
-  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
-  theme_minimal() +
-  ylab("")
 ```
 
 
 
+```{r fig.height=2, fig.width=2}
+record_WeakMargin$Estimator[record_WeakMargin$Estimator == "AIPW"] = "DAIPW"
+plot_WeakMargin = ggplot(record_WeakMargin %>% filter(Estimator %in% c("DAIPW", "Mean", "NH", "NH0")), aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density), lty = 2) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme(text = element_text(face="bold")) +
+  ylab("")
+
+plot_WeakMargin
+ggsave("plot_WeakMargin.eps", plot = plot_WeakMargin, device = "eps")
+```
+
+
+
+```{r}
+# output results
+record = readRDS("record_PARETO_MARGIN.RDS")
+
+# weak margin
+record_StrongMargin = data.frame(
+  IPW  = rep(0, MC),
+  AIPW = rep(0, MC),
+  Mean = rep(0, MC),
+  NH   = rep(0, MC)
+)
+for (mc in 1:MC){
+  ## IPW
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[1]]$est[1]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[1]]$var_est[1]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[1]]$est[1]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[1]]$var_est[1]
+  record_StrongMargin$IPW[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## AIPW
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[2]]$est[1]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[2]]$var_est[1]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[2]]$est[1]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[2]]$var_est[1]
+  record_StrongMargin$AIPW[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## Mean
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[1]]$est[4]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[1]]$var_est[4]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[1]]$est[4]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[1]]$var_est[4]
+  record_StrongMargin$Mean[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[2]]$est[3]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[2]]$var_est[3]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[2]]$est[3]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[2]]$var_est[3]
+  record_StrongMargin$NH[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[1]]$est[2]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[1]]$var_est[2]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[1]]$est[2]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[1]]$var_est[2]
+  record_StrongMargin$IAD[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = record$mu_Choice_3$arm1[[mc]][[1]]$est[3]
+  arm1_var = record$mu_Choice_3$arm1[[mc]][[1]]$var_est[3]
+  arm2_est = record$mu_Choice_3$arm2[[mc]][[1]]$est[3]
+  arm2_var = record$mu_Choice_3$arm2[[mc]][[1]]$var_est[3]
+  record_StrongMargin$NH0[mc] = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+}
+
+record_StrongMargin = record_StrongMargin %>% 
+  gather(key = "Estimator", value = "value")
+position_x = rep(seq(-4, 4, length.out = MC), 6)
+normal_density = dnorm(position_x)
+record_StrongMargin = cbind(record_StrongMargin, position_x, normal_density)
+```
+
+
+```{r fig.height=2, fig.width=2}
+record_StrongMargin$Estimator[record_StrongMargin$Estimator == "IPW"] = "DIPW"
+plot_StrongMargin = ggplot(record_StrongMargin %>% filter(Estimator %in% c("DIPW", "Mean", "NH", "NH0")), aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.40) +
+  geom_line(aes(x = position_x, y = normal_density), lty = 2) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme(text = element_text(face="bold")) +
+  ylab("")
+
+plot_StrongMargin
+ggsave("plot_StrongMargin.eps", plot = plot_StrongMargin, device = "eps")
+```
 
 
 

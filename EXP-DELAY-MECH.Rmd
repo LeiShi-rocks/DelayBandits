@@ -9,6 +9,10 @@ output: pdf_document
 library(EnvStats)
 library(dplyr)
 library(ggplot2)
+library(tidyverse)
+library(ggbreak)
+library(patchwork)
+library(ggpubr)
 source("Supp_functions.R")
 ```
 
@@ -287,5 +291,660 @@ saveRDS(record_PARETO, file = "record_PARETO.RDS")
 ```
 
 
+# data analysis
+## No delay
+```{r}
+record_NODELAY = readRDS("record_NODELAY.RDS")
 
+record_NODELAY_SUMMARY = data.frame()
+
+#
+CodeBook = data.frame(
+  DIPW  = c(1,1),
+  DAIPW = c(2,1),
+  Mean  = c(1,4),
+  NH    = c(2,3),
+  IAD   = c(1,2),
+  NH0   = c(1,3)
+)
+
+for (ind in 1:4){
+  record_running = data.frame(
+    Estimator = c("DIPW", "DAIPW", "Mean", "NH", "IAD", "NH0"),
+    SE        = rep(0, 6),
+    Bias      = rep(0, 6),
+    MSE       = rep(0, 6),
+    Coverage  = rep(0, 6)
+  )
+  
+    ## DIPW
+  for (est_ind in c(1:6)){
+    record_running$SE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          sqrt(record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]])
+          }))
+    record_running$Bias[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          abs(record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5)
+          }))
+    record_running$MSE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          Bias^2 + Var
+          }))
+    record_running$Coverage[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_NODELAY[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NODELAY[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          abs(Bias) <= 1.96 * sqrt(Var)
+          }))
+  }
+  
+  record_NODELAY_SUMMARY = rbind(record_NODELAY_SUMMARY,
+                         record_running %>% 
+                           gather(key = "Criterion", value= "value", -Estimator) %>%
+                           mutate(Time = TT_Choice[ind])
+  )
+    
+}
+
+```
+
+```{r fig.height=2, fig.width=2}
+plot_NODELAY <- ggplot(record_NODELAY_SUMMARY %>% 
+                         filter(Estimator %in% c("DAIPW", "Mean", "NH")), 
+                       aes(x = Time, 
+                           lty = Estimator,
+                           pch = Estimator,
+                           col = Estimator)) +
+  geom_line(aes(y = value)) +
+  geom_point(aes(y = value)) +
+  facet_wrap(vars(Criterion), scales = "free") + 
+  theme(text = element_text(face="bold"),
+        legend.position="top") + 
+  ylab("")
+
+plot_NODELAY
+ggsave("plot_NODELAY.eps", plot = plot_NODELAY, device = "eps")
+```
+
+```{r}
+library(knitr)
+
+df <- record_NODELAY_SUMMARY %>% 
+  filter(Estimator %in% c("DIPW", "Mean", "NH", "NH0")) %>%
+  filter(Time == 10000) %>%
+  select(-Time) %>%
+  reshape(idvar = "Criterion", 
+          timevar = "Estimator", 
+          direction = "wide")
+
+cat(kable(df, "latex", booktabs = TRUE))
+```
+
+
+
+
+```{r}
+# no margin
+record_NODELAY = readRDS("record_NODELAY.RDS")
+record_NODELAY_DIST = data.frame(
+  IPW  = rep(0, MC),
+  AIPW = rep(0, MC),
+  Mean = rep(0, MC),
+  NH   = rep(0, MC)
+)
+
+  ## IPW
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$var_est[1]})
+  
+  record_NODELAY_DIST$IPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## AIPW
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[2]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[2]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[2]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[2]]$var_est[1]})
+  record_NODELAY_DIST$AIPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## Mean
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$est[4]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$est[4]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$var_est[4]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$var_est[4]})
+  record_NODELAY_DIST$Mean = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[2]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[2]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[2]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[2]]$var_est[3]})
+  record_NODELAY_DIST$NH = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$est[2]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$est[2]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$var_est[2]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$var_est[2]})
+  record_NODELAY_DIST$IAD = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm1[[mc]][[1]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_NODELAY$TT_Choice_3$arm2[[mc]][[1]]$var_est[3]})
+  record_NODELAY_DIST$NH0 = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+
+
+record_NODELAY_DIST = record_NODELAY_DIST %>% gather(key = "Estimator", value = "value")
+position_x = rep(seq(-4, 4, length.out = MC), 6)
+normal_density = dnorm(position_x)
+record_NODELAY_DIST = cbind(record_NODELAY_DIST, position_x, normal_density)
+
+ggplot(record_NODELAY_DIST, aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density)) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme_minimal() +
+  ylab("")
+```
+
+
+## POISSON
+```{r}
+record_POISSON = readRDS("record_POISSON.RDS")
+
+record_POISSON_SUMMARY = data.frame()
+
+#
+CodeBook = data.frame(
+  DIPW  = c(1,1),
+  DAIPW = c(2,1),
+  Mean  = c(1,4),
+  NH    = c(2,3),
+  IAD   = c(1,2),
+  NH0   = c(1,3)
+)
+
+for (ind in 1:4){
+  record_running = data.frame(
+    Estimator = c("DIPW", "DAIPW", "Mean", "NH", "IAD", "NH0"),
+    SE        = rep(0, 6),
+    Bias      = rep(0, 6),
+    MSE       = rep(0, 6),
+    Coverage  = rep(0, 6)
+  )
+  
+    ## DIPW
+  for (est_ind in c(1:6)){
+    record_running$SE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          sqrt(record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]])
+          }))
+    record_running$Bias[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          abs(record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5)
+          }))
+    record_running$MSE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          Bias^2 + Var
+          }))
+    record_running$Coverage[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_POISSON[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_POISSON[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          abs(Bias) <= 1.96 * sqrt(Var)
+          }))
+  }
+  
+  record_POISSON_SUMMARY = rbind(record_POISSON_SUMMARY,
+                         record_running %>% 
+                           gather(key = "Criterion", value= "value", -Estimator) %>%
+                           mutate(Time = TT_Choice[ind])
+  )
+    
+}
+
+```
+
+```{r fig.height=2, fig.width=2}
+plot_POISSON <- ggplot(record_POISSON_SUMMARY %>% 
+                         filter(Estimator %in% c("DIPW", "Mean", "NH")), 
+                       aes(x = Time, 
+                           lty = Estimator,
+                           pch = Estimator,
+                           col = Estimator)) +
+  geom_line(aes(y = value)) +
+  geom_point(aes(y = value)) +
+  facet_wrap(vars(Criterion), scales = "free") + 
+  theme(text = element_text(face="bold"),
+        legend.position="top") + 
+  ylab("")
+
+plot_POISSON
+ggsave("plot_POISSON.eps", plot = plot_POISSON, device = "eps")
+```
+
+```{r}
+# no margin
+record_POISSON = readRDS("record_POISSON.RDS")
+record_POISSON_DIST = data.frame(
+  IPW  = rep(0, MC),
+  AIPW = rep(0, MC),
+  Mean = rep(0, MC),
+  NH   = rep(0, MC)
+)
+
+  ## IPW
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$var_est[1]})
+  
+  record_POISSON_DIST$IPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## AIPW
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[2]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[2]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[2]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[2]]$var_est[1]})
+  record_POISSON_DIST$AIPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## Mean
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$est[4]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$est[4]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$var_est[4]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$var_est[4]})
+  record_POISSON_DIST$Mean = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[2]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[2]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[2]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[2]]$var_est[3]})
+  record_POISSON_DIST$NH = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$est[2]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$est[2]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$var_est[2]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$var_est[2]})
+  record_POISSON_DIST$IAD = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm1[[mc]][[1]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_POISSON$TT_Choice_3$arm2[[mc]][[1]]$var_est[3]})
+  record_POISSON_DIST$NH0 = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+
+
+record_POISSON_DIST = record_POISSON_DIST %>% gather(key = "Estimator", value = "value")
+position_x = rep(seq(-4, 4, length.out = MC), 6)
+normal_density = dnorm(position_x)
+record_POISSON_DIST = cbind(record_POISSON_DIST, position_x, normal_density)
+
+ggplot(record_POISSON_DIST, aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density)) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme_minimal() +
+  ylab("")
+```
+
+
+
+## NEGBINOM
+```{r}
+record_NEGBINOM = readRDS("record_NEGBINOM.RDS")
+
+record_NEGBINOM_SUMMARY = data.frame()
+
+#
+CodeBook = data.frame(
+  DIPW  = c(1,1),
+  DAIPW = c(2,1),
+  Mean  = c(1,4),
+  NH    = c(2,3),
+  IAD   = c(1,2),
+  NH0   = c(1,3)
+)
+
+for (ind in 1:4){
+  record_running = data.frame(
+    Estimator = c("DIPW", "DAIPW", "Mean", "NH", "IAD", "NH0"),
+    SE        = rep(0, 6),
+    Bias      = rep(0, 6),
+    MSE       = rep(0, 6),
+    Coverage  = rep(0, 6)
+  )
+  
+    ## DIPW
+  for (est_ind in c(1:6)){
+    record_running$SE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          sqrt(record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]])
+          }))
+    record_running$Bias[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          abs(record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5)
+          }))
+    record_running$MSE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          Bias^2 + Var
+          }))
+    record_running$Coverage[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_NEGBINOM[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_NEGBINOM[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          abs(Bias) <= 1.96 * sqrt(Var)
+          }))
+  }
+  
+  record_NEGBINOM_SUMMARY = rbind(record_NEGBINOM_SUMMARY,
+                         record_running %>% 
+                           gather(key = "Criterion", value= "value", -Estimator) %>%
+                           mutate(Time = TT_Choice[ind])
+  )
+    
+}
+
+```
+
+```{r fig.height=2, fig.width=2}
+plot_NEGBINOM <- ggplot(record_NEGBINOM_SUMMARY %>% 
+                         filter(Estimator %in% c("DIPW", "Mean", "NH")), 
+                       aes(x = Time, 
+                           lty = Estimator,
+                           pch = Estimator,
+                           col = Estimator)) +
+  geom_line(aes(y = value)) +
+  geom_point(aes(y = value)) +
+  facet_wrap(vars(Criterion), scales = "free") + 
+  theme(text = element_text(face="bold"),
+        legend.position="top") + 
+  ylab("")
+
+plot_NEGBINOM
+ggsave("plot_NEGBINOM.eps", plot = plot_NEGBINOM, device = "eps")
+```
+
+
+```{r}
+# no margin
+record_NEGBINOM = readRDS("record_NEGBINOM.RDS")
+record_NEGBINOM_DIST = data.frame(
+  IPW  = rep(0, MC),
+  AIPW = rep(0, MC),
+  Mean = rep(0, MC),
+  NH   = rep(0, MC)
+)
+
+  ## IPW
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$var_est[1]})
+  
+  record_NEGBINOM_DIST$IPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## AIPW
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[2]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[2]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[2]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[2]]$var_est[1]})
+  record_NEGBINOM_DIST$AIPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## Mean
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$est[4]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$est[4]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$var_est[4]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$var_est[4]})
+  record_NEGBINOM_DIST$Mean = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[2]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[2]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[2]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[2]]$var_est[3]})
+  record_NEGBINOM_DIST$NH = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$est[2]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$est[2]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$var_est[2]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$var_est[2]})
+  record_NEGBINOM_DIST$IAD = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm1[[mc]][[1]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_NEGBINOM$TT_Choice_3$arm2[[mc]][[1]]$var_est[3]})
+  record_NEGBINOM_DIST$NH0 = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+
+
+record_NEGBINOM_DIST = record_NEGBINOM_DIST %>% gather(key = "Estimator", value = "value")
+position_x = rep(seq(-4, 4, length.out = MC), 6)
+normal_density = dnorm(position_x)
+record_NEGBINOM_DIST = cbind(record_NEGBINOM_DIST, position_x, normal_density)
+
+ggplot(record_NEGBINOM_DIST, aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density)) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme_minimal() +
+  ylab("")
+```
+
+
+
+
+## PARETO
+```{r}
+record_PARETO = readRDS("record_PARETO.RDS")
+
+record_PARETO_SUMMARY = data.frame()
+
+#
+CodeBook = data.frame(
+  DIPW  = c(1,1),
+  DAIPW = c(2,1),
+  Mean  = c(1,4),
+  NH    = c(2,3),
+  IAD   = c(1,2),
+  NH0   = c(1,3)
+)
+
+for (ind in 1:4){
+  record_running = data.frame(
+    Estimator = c("DIPW", "DAIPW", "Mean", "NH", "IAD", "NH0"),
+    SE        = rep(0, 6),
+    Bias      = rep(0, 6),
+    MSE       = rep(0, 6),
+    Coverage  = rep(0, 6)
+  )
+  
+    ## DIPW
+  for (est_ind in c(1:6)){
+    record_running$SE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          sqrt(record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]])
+          }))
+    record_running$Bias[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          abs(record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5)
+          }))
+    record_running$MSE[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          Bias^2 + Var
+          }))
+    record_running$Coverage[est_ind] = mean(
+      sapply(
+        1:MC,
+        function(x){
+          Bias = record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] -
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$est[CodeBook[2,est_ind]] - 0.5
+          Var = record_PARETO[[ind]]$arm1[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]] +
+            record_PARETO[[ind]]$arm2[[x]][[CodeBook[1,est_ind]]]$var[CodeBook[2,est_ind]]
+          abs(Bias) <= 1.96 * sqrt(Var)
+          }))
+  }
+  
+  record_PARETO_SUMMARY = rbind(record_PARETO_SUMMARY,
+                         record_running %>% 
+                           gather(key = "Criterion", value= "value", -Estimator) %>%
+                           mutate(Time = TT_Choice[ind])
+  )
+    
+}
+
+```
+
+```{r fig.height=2, fig.width=2}
+plot_PARETO <- ggplot(record_PARETO_SUMMARY %>% 
+                         filter(Estimator %in% c("DAIPW", "Mean", "NH")), 
+                       aes(x = Time, 
+                           lty = Estimator,
+                           pch = Estimator,
+                           col = Estimator)) +
+  geom_line(aes(y = value)) +
+  geom_point(aes(y = value)) +
+  facet_wrap(vars(Criterion), scales = "free") + 
+  theme(text = element_text(face="bold"),
+        legend.position="top") + 
+  ylab("")
+
+plot_PARETO
+ggsave("plot_PARETO.eps", plot = plot_PARETO, device = "eps")
+```
+
+
+```{r}
+# no margin
+record_PARETO_DIST = data.frame(
+  IPW  = rep(0, MC),
+  AIPW = rep(0, MC),
+  Mean = rep(0, MC),
+  NH   = rep(0, MC)
+)
+
+  ## IPW
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$var_est[1]})
+  
+  record_PARETO_DIST$IPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## AIPW
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[2]]$est[1]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[2]]$est[1]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[2]]$var_est[1]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[2]]$var_est[1]})
+  record_PARETO_DIST$AIPW = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## Mean
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$est[4]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$est[4]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$var_est[4]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$var_est[4]})
+  record_PARETO_DIST$Mean = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[2]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[2]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[2]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[2]]$var_est[3]})
+  record_PARETO_DIST$NH = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## IAD
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$est[2]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$est[2]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$var_est[2]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$var_est[2]})
+  record_PARETO_DIST$IAD = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+  
+  ## NH-0
+  arm1_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$est[3]})
+  arm2_est = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$est[3]})
+  arm1_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm1[[mc]][[1]]$var_est[3]})
+  arm2_var = sapply(1:MC, function(mc) {record_PARETO$TT_Choice_3$arm2[[mc]][[1]]$var_est[3]})
+  record_PARETO_DIST$NH0 = (arm1_est - arm2_est - 0.5)/sqrt(arm1_var + arm2_var)
+
+
+record_PARETO_DIST = record_PARETO_DIST %>% gather(key = "Estimator", value = "value")
+position_x = rep(seq(-4, 4, length.out = MC), 6)
+normal_density = dnorm(position_x)
+record_PARETO_DIST = cbind(record_PARETO_DIST, position_x, normal_density)
+
+ggplot(record_PARETO_DIST, aes(x = value)) +
+  geom_histogram(aes(y = ..density..), binwidth = 0.20) +
+  geom_line(aes(x = position_x, y = normal_density)) +
+  facet_wrap(vars(Estimator), ncol = 2, scales = "free") +
+  theme_minimal() +
+  ylab("")
+```
 
