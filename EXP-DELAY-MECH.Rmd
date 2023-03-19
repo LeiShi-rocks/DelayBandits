@@ -367,7 +367,7 @@ for (ind in 1:4){
 
 ```{r fig.height=2, fig.width=2}
 plot_NODELAY <- ggplot(record_NODELAY_SUMMARY %>% 
-                         filter(Estimator %in% c("DAIPW", "Mean", "NH")), 
+                         filter(Estimator %in% c("DIPW", "DAIPW", "Mean", "NH")), 
                        aes(x = Time, 
                            lty = Estimator,
                            pch = Estimator,
@@ -380,7 +380,7 @@ plot_NODELAY <- ggplot(record_NODELAY_SUMMARY %>%
   ylab("")
 
 plot_NODELAY
-ggsave("plot_NODELAY.eps", plot = plot_NODELAY, device = "eps")
+# ggsave("plot_NODELAY.eps", plot = plot_NODELAY, device = "eps")
 ```
 
 ```{r}
@@ -543,7 +543,7 @@ for (ind in 1:4){
 
 ```{r fig.height=2, fig.width=2}
 plot_POISSON <- ggplot(record_POISSON_SUMMARY %>% 
-                         filter(Estimator %in% c("DIPW", "Mean", "NH")), 
+                         filter(Estimator %in% c("DIPW", "DAIPW", "Mean", "NH")), 
                        aes(x = Time, 
                            lty = Estimator,
                            pch = Estimator,
@@ -556,7 +556,7 @@ plot_POISSON <- ggplot(record_POISSON_SUMMARY %>%
   ylab("")
 
 plot_POISSON
-ggsave("plot_POISSON.eps", plot = plot_POISSON, device = "eps")
+# ggsave("plot_POISSON.eps", plot = plot_POISSON, device = "eps")
 ```
 
 ```{r}
@@ -703,7 +703,7 @@ for (ind in 1:4){
 
 ```{r fig.height=2, fig.width=2}
 plot_NEGBINOM <- ggplot(record_NEGBINOM_SUMMARY %>% 
-                         filter(Estimator %in% c("DIPW", "Mean", "NH")), 
+                         filter(Estimator %in% c("DIPW", "DAIPW", "Mean", "NH")), 
                        aes(x = Time, 
                            lty = Estimator,
                            pch = Estimator,
@@ -716,7 +716,7 @@ plot_NEGBINOM <- ggplot(record_NEGBINOM_SUMMARY %>%
   ylab("")
 
 plot_NEGBINOM
-ggsave("plot_NEGBINOM.eps", plot = plot_NEGBINOM, device = "eps")
+# ggsave("plot_NEGBINOM.eps", plot = plot_NEGBINOM, device = "eps")
 ```
 
 
@@ -863,9 +863,10 @@ for (ind in 1:4){
 
 ```
 
-```{r fig.height=2, fig.width=2}
+
+```{r fig.height=2, fig.width=2.5}
 plot_PARETO <- ggplot(record_PARETO_SUMMARY %>% 
-                         filter(Estimator %in% c("DAIPW", "Mean", "NH")), 
+                         filter(Estimator %in% c("DAIPW", "DIPW")), 
                        aes(x = Time, 
                            lty = Estimator,
                            pch = Estimator,
